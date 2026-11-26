@@ -63,6 +63,9 @@ const game = {
     if (k === 'fast') location.reload();
   },
   resetAll() {
+    // clear the copy in memory too, so nothing can save the old flags back
+    save.found = {}; save.pos = {}; save.celebrated = {}; save.last = null;
+    writeSave(save);
     resetSave(save);
     location.reload();
   },

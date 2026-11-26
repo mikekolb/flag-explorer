@@ -318,6 +318,7 @@ function flyTo(id) {
 function openSettings() {
   $('set-voice').checked = G.save.settings.voice;
   $('set-fast').checked = G.save.settings.fast;
+  $('version').textContent = `Version: ${__BUILD_TIME__}`;
   const fsOK = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   $('btn-fullscreen').classList.toggle('hidden', !fsOK || window.navigator.standalone);
   openModal('settings');
