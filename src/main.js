@@ -63,7 +63,7 @@ const game = {
     if (k === 'fast') location.reload();
   },
   resetAll() {
-    resetSave();
+    resetSave(save);
     location.reload();
   },
 };

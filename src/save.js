@@ -15,10 +15,19 @@ export function loadSave() {
   return fresh();
 }
 
+let locked = false; // after a reset, nothing may write the old progress back
+
 export function writeSave(s) {
+  if (locked) return;
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage full or blocked */ }
 }
 
-export function resetSave() {
-  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+// Erases progress but keeps settings (voice, fast mode).
+export function resetSave(s) {
+  const keep = s?.settings;
+  try {
+    localStorage.removeItem(KEY);
+    if (keep) localStorage.setItem(KEY, JSON.stringify({ ...fresh(), settings: keep }));
+  } catch { /* ignore */ }
+  locked = true;
 }
