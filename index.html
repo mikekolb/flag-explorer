@@ -52,7 +52,7 @@
     <div class="start-card">
       <div class="title-flags">🚩🌍🚩</div>
       <h1>Flag Explorer</h1>
-      <p>Walk around the world. Find the hidden flags!</p>
+      <p>Explore the islands. Find the hidden flags!</p>
       <p id="start-progress"></p>
       <button id="btn-play" class="huge-btn" disabled>Loading…</button>
       <p class="tip" id="start-tip"></p>
@@ -96,8 +96,8 @@
     <div class="card full">
       <div class="card-head">
         <div class="tabs">
-          <button id="tab-here" class="tab">This continent</button>
-          <button id="tab-world" class="tab">🌍 World — fly somewhere</button>
+          <button id="tab-here" class="tab">This island</button>
+          <button id="tab-world" class="tab">🏝️ All islands — fly somewhere</button>
         </div>
         <button class="close-btn" data-close="mapscreen">✕</button>
       </div>
@@ -115,6 +115,8 @@
       <label class="setting"><input type="checkbox" id="set-voice" /> Say country names out loud</label>
       <label class="setting"><input type="checkbox" id="set-fast" /> Fast mode (smoother on older iPads)</label>
       <button id="btn-fullscreen" class="pill-btn">Full screen</button>
+      <button id="btn-newworld" class="pill-btn green"><span class="lbl">New random world</span></button>
+      <p class="set-note">Makes new islands and hides the flags you have not found in new places. Found flags stay found.</p>
       <div class="reset-box">
         <p>For grown-ups: hold the button for 3 seconds to erase all found flags.</p>
         <button id="btn-reset" class="pill-btn red"><span id="reset-fill"></span><span class="lbl">Hold to reset</span></button>

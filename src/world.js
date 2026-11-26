@@ -1,98 +1,22 @@
-// Builds one continent: terrain shaped like the real map, sea, trees, houses,
-// hills, caves and the hidden flags.
+// Builds one island in 3D: terrain, sea, trees, houses, hills, caves and the hidden
+// flags. The land shape and flag spots come from planIsland() in islands.js.
 import * as THREE from 'three';
-import { loadGeo, makeProjection, drawMask, drawGround } from './geo.js';
+import { baseHeight, paintIsland } from './islands.js';
 import { rng, fbm, smoothstep } from './noise.js';
 import { flagCanvas } from './flags.js';
 
-const MIN_GAP = 15; // steps between any two flags, so tiny countries each get room
+export async function buildWorld(plan, found, opts = {}) {
+  const { island, W, H, land, soft } = plan;
+  const R = rng(island.id + '-world');
+  const flags = plan.flags.map((p) => ({ code: p.code, x: p.x, z: p.z }));
 
-function sampler(m, W, H) {
-  return (x, z) => {
-    const gx = Math.min(m.w - 1.001, Math.max(0, (x + W / 2) / m.cell - 0.5));
-    const gz = Math.min(m.h - 1.001, Math.max(0, (z + H / 2) / m.cell - 0.5));
-    const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j;
-    const a = m.arr[j * m.w + i], b = m.arr[j * m.w + i + 1];
-    const c = m.arr[(j + 1) * m.w + i], d = m.arr[(j + 1) * m.w + i + 1];
-    return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
-  };
-}
-
-function blur(m, passes) {
-  let src = m.arr;
-  for (let p = 0; p < passes; p++) {
-    const out = new Float32Array(src.length);
-    for (let j = 0; j < m.h; j++) {
-      for (let i = 0; i < m.w; i++) {
-        let s = 0, n = 0;
-        for (let dj = -1; dj <= 1; dj++) {
-          const jj = j + dj; if (jj < 0 || jj >= m.h) continue;
-          for (let di = -1; di <= 1; di++) {
-            const ii = i + di; if (ii < 0 || ii >= m.w) continue;
-            s += src[jj * m.w + ii]; n++;
-          }
-        }
-        out[j * m.w + i] = s / n;
-      }
-    }
-    src = out;
-  }
-  return { ...m, arr: src };
-}
-
-export async function buildWorld(cont, countries, found, opts = {}) {
-  await loadGeo();
-  const proj = makeProjection(cont);
-  const { W, H } = proj;
-  const R = rng(cont.id + '-world');
-
-  // ---- 1. place flags near their real spots, pushed apart so each has room ----
-  let mask = drawMask(proj, 2);
-  let land = sampler(mask, W, H);
-  const flags = countries.map((c) => ({ c, code: c.code, ...proj.toWorld(c.lat, c.lon) }));
-  const lim = (v, m) => Math.max(-m, Math.min(m, v));
-  for (let it = 0; it < 120; it++) {
-    for (let i = 0; i < flags.length; i++) {
-      for (let j = i + 1; j < flags.length; j++) {
-        const a = flags[i], b = flags[j];
-        let dx = b.x - a.x, dz = b.z - a.z;
-        let d = Math.hypot(dx, dz);
-        if (d >= MIN_GAP) continue;
-        if (d < 0.01) { dx = Math.cos(i + j); dz = Math.sin(i + j); d = 1; }
-        const push = (MIN_GAP - d) / 2 + 0.01;
-        a.x -= (dx / d) * push; a.z -= (dz / d) * push;
-        b.x += (dx / d) * push; b.z += (dz / d) * push;
-      }
-    }
-    for (const f of flags) { f.x = lim(f.x, W / 2 - 12); f.z = lim(f.z, H / 2 - 12); }
-  }
-  // move flags that ended up in the sea onto nearby land, or give them an island
-  const islands = [];
-  const spacedOK = (f, x, z) => flags.every((o) => o === f || Math.hypot(o.x - x, o.z - z) >= MIN_GAP * 0.9);
-  for (const f of flags) {
-    if (land(f.x, f.z) > 0.7) continue;
-    let done = false;
-    for (let r = 2; r <= 26 && !done; r += 2) {
-      for (let k = 0; k < 16 && !done; k++) {
-        const a = (k / 16) * Math.PI * 2;
-        const x = f.x + Math.cos(a) * r, z = f.z + Math.sin(a) * r;
-        if (Math.abs(x) < W / 2 - 10 && Math.abs(z) < H / 2 - 10 && land(x, z) > 0.8 && spacedOK(f, x, z)) {
-          f.x = x; f.z = z; done = true;
-        }
-      }
-    }
-    if (!done) islands.push({ x: f.x, z: f.z, r: 7 });
-  }
-  if (islands.length) { mask = drawMask(proj, 2, islands); land = sampler(mask, W, H); }
-  const soft = sampler(blur(mask, 2), W, H);
-
-  // ---- 2. hiding spot for each flag ----
+  // ---- 1. hiding spot for each flag (the spots themselves come from the plan) ----
   for (const f of flags) {
     const r = rng(f.code)();
     f.type = r < 0.34 ? 'open' : r < 0.6 ? 'house' : r < 0.8 ? 'hill' : 'cave';
   }
 
-  // ---- 3. height of the ground everywhere ----
+  // ---- 2. height of the ground everywhere ----
   const bumps = [];
   for (const f of flags) if (f.type === 'hill') bumps.push({ x: f.x, z: f.z, h: 9, s: 6 });
   for (let n = 0, tries = 0; n < 22 && tries < 400; tries++) {
@@ -101,15 +25,14 @@ export async function buildWorld(cont, countries, found, opts = {}) {
     bumps.push({ x, z, h: 5 + R() * 6, s: 8 + R() * 6 }); n++;
   }
   function heightAt(x, z) {
-    const m = smoothstep(0.3, 0.75, soft(x, z));
-    let h = -0.8 + m * (1.1 + fbm(x * 0.018, z * 0.018) * 3.2);
+    let h = baseHeight(soft(x, z), x, z);
     for (const b of bumps) {
       const dx = x - b.x, dz = z - b.z, d2 = dx * dx + dz * dz, lim2 = 9 * b.s * b.s;
       if (d2 < lim2) h += b.h * Math.exp(-d2 / (2 * b.s * b.s));
     }
     return h;
   }
-  // tiny islands can end up under the sea once smoothed: lift a small mound so the flag stays dry
+  // a flag near the shore could end up in the water: lift a small mound so it stays dry
   for (const f of flags) {
     const y = heightAt(f.x, f.z);
     if (y < 0.7) bumps.push({ x: f.x, z: f.z, h: 1.5 - y, s: 4.5 });
@@ -120,9 +43,8 @@ export async function buildWorld(cont, countries, found, opts = {}) {
   const disposables = [];
   const keep = (o) => { disposables.push(o); return o; };
 
-  // ---- 4. terrain mesh with the political map painted on it ----
-  const px = Math.min(3.2, 2048 / Math.max(W, H));
-  const groundCanvas = drawGround(proj, px, islands);
+  // ---- 3. terrain mesh with the island map painted on it ----
+  const groundCanvas = paintIsland(plan, Math.min(2.5, 2048 / Math.max(W, H)));
   const tex = keep(new THREE.CanvasTexture(groundCanvas));
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = opts.anisotropy || 1;
@@ -156,7 +78,7 @@ export async function buildWorld(cont, countries, found, opts = {}) {
   group.add(floor);
   terrain.position.y = 0.001;
 
-  // ---- 5. colliders (circles and boxes) in a grid for fast lookups ----
+  // ---- 4. colliders (circles and boxes) in a grid for fast lookups ----
   const CS = 8, cells = new Map();
   function addCollider(c) {
     const ex = c.r ?? Math.max(c.hx, c.hz);
@@ -202,13 +124,13 @@ export async function buildWorld(cont, countries, found, opts = {}) {
     return [x, z];
   }
 
-  // ---- 6. houses ----
+  // ---- 5. houses ----
   const houses = [];
   const cx = flags.reduce((s, f) => s + f.x, 0) / Math.max(1, flags.length);
   const cz = flags.reduce((s, f) => s + f.z, 0) / Math.max(1, flags.length);
   for (const f of flags) {
     if (f.type !== 'house') continue;
-    // put the house between the flag and the middle of the continent, so the flag hides behind it
+    // put the house between the flag and the middle of the island, so the flag hides behind it
     let dx = cx - f.x, dz = cz - f.z;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
@@ -244,7 +166,7 @@ export async function buildWorld(cont, countries, found, opts = {}) {
   wallMesh.count = roofMesh.count = houses.length;
   group.add(wallMesh, roofMesh);
 
-  // ---- 7. caves ----
+  // ---- 6. caves ----
   const caves = [];
   const rocks = [];
   for (const f of flags) {
@@ -280,7 +202,7 @@ export async function buildWorld(cont, countries, found, opts = {}) {
     group.add(dome);
   }
 
-  // ---- 8. trees ----
+  // ---- 7. trees ----
   const trees = [];
   const target = Math.min(1800, Math.round((W * H) / 170));
   for (let tries = 0; trees.length < target && tries < target * 4; tries++) {
@@ -316,7 +238,7 @@ export async function buildWorld(cont, countries, found, opts = {}) {
   trunkMesh.count = trees.length;
   group.add(trunkMesh, pineMesh, roundMesh);
 
-  // ---- 9. flags ----
+  // ---- 8. flags ----
   const poleMesh = new THREE.InstancedMesh(keep(new THREE.CylinderGeometry(0.08, 0.1, 1, 6).translate(0, 0.5, 0)), keep(new THREE.MeshLambertMaterial({ flatShading: true })), Math.max(1, flags.length));
   const starGeo = keep(new THREE.OctahedronGeometry(0.4, 0));
   const starMat = keep(new THREE.MeshLambertMaterial({ color: '#ffd23f', emissive: '#7a5a00', flatShading: true }));
@@ -357,25 +279,26 @@ export async function buildWorld(cont, countries, found, opts = {}) {
     f.star = s;
   }
 
-  // ---- 10. hint beacon ----
+  // ---- 9. hint beacon ----
   const beamMat = keep(new THREE.MeshBasicMaterial({ color: '#fff05a', transparent: true, opacity: 0.3, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
   const beam = new THREE.Mesh(keep(new THREE.CylinderGeometry(1.1, 1.1, 140, 12, 1, true).translate(0, 70, 0)), beamMat);
   beam.visible = false;
   group.add(beam);
 
   // ---- spawn point: on land, near the middle of the flags, not on top of one ----
-  let spawn = { x: cx, z: cz };
+  let spawn = { ...plan.center };
+  const sx = spawn.x, sz = spawn.z;
   outer: for (let r = 0; r < 200; r += 3) {
     for (let k = 0; k < 24; k++) {
       const a = (k / 24) * Math.PI * 2;
-      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      const x = sx + Math.cos(a) * r, z = sz + Math.sin(a) * r;
       if (Math.abs(x) > W / 2 - 5 || Math.abs(z) > H / 2 - 5) continue;
       if (land(x, z) > 0.9 && !blocked(x, z, 1.5) && flags.every((f) => Math.hypot(f.x - x, f.z - z) > 9)) { spawn = { x, z }; break outer; }
     }
   }
 
   return {
-    cont, proj, W, H, group, flags, caves, groundCanvas, spawn, heightAt, resolve,
+    island, W, H, group, flags, caves, groundCanvas, spawn, heightAt, resolve,
     markCollected(code) {
       const f = flags.find((x) => x.code === code);
       if (!f) return;

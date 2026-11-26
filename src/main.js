@@ -1,18 +1,23 @@
 import * as THREE from 'three';
 import { CONTINENT_BY_ID } from './data/continents.js';
 import { BY_CODE } from './data/countries.js';
-import { ACTIVE_COUNTRIES, countriesIn, isContinentOpen } from './config.js';
-import { loadGeo } from './geo.js';
+import { ACTIVE_COUNTRIES, countriesIn } from './config.js';
+import { ISLANDS, ISLAND_BY_ID, initIslands, islandOf, codesOn, planIsland } from './islands.js';
 import { buildWorld } from './world.js';
 import { makeKid } from './player.js';
 import { makeControls } from './controls.js';
-import { loadSave, writeSave, resetSave } from './save.js';
+import { loadSave, writeSave, resetSave, lockSave, newSeed } from './save.js';
 import { unlockSpeech, setVoiceOn } from './speech.js';
 import { flagCanvas } from './flags.js';
 import * as UI from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const save = loadSave();
+// saves from before the random world: forget positions on the old real-map continents
+for (const k of Object.keys(save.pos)) if (!ISLAND_BY_ID[k]) delete save.pos[k];
+if (save.last && !ISLAND_BY_ID[save.last]) save.last = null;
+writeSave(save); // keeps the world seed
+initIslands(save.seed, ACTIVE_COUNTRIES.map((c) => c.code));
 setVoiceOn(save.settings.voice);
 
 // ---------- renderer & scene ----------
@@ -62,6 +67,13 @@ const game = {
     if (k === 'voice') setVoiceOn(v);
     if (k === 'fast') location.reload();
   },
+  newWorld() {
+    // a new random world: same found flags, new island shapes and flag spots
+    save.seed = newSeed(); save.pos = {}; save.last = null;
+    writeSave(save);
+    lockSave(); // so the old position is not saved back while reloading
+    location.reload();
+  },
   resetAll() {
     // clear the copy in memory too, so nothing can save the old flags back
     save.found = {}; save.pos = {}; save.celebrated = {}; save.last = null;
@@ -80,23 +92,23 @@ function setHint(code) {
   world?.setBeacon(f);
   if (code && !f) {
     const c = BY_CODE[code];
-    const cont = CONTINENT_BY_ID[c.continent];
-    UI.showBanner(`The flag of ${c.name} is in ${cont.name}. Open the Map and fly to ${cont.name} first!`);
-    $('banner-go').onclick = () => { UI.hideBanner(); UI.openMap('world', c.continent); };
+    const isl = ISLAND_BY_ID[islandOf(code)];
+    UI.showBanner(`The flag of ${c.name} is on ${isl.name}. Open the Map and fly to ${isl.name} first!`);
+    $('banner-go').onclick = () => { UI.hideBanner(); UI.openMap('world', isl.id); };
   }
 }
 
-// ---------- travelling between continents ----------
+// ---------- travelling between islands ----------
 async function travel(id) {
-  if (!isContinentOpen(id)) return;
-  const cont = CONTINENT_BY_ID[id];
-  $('loading-text').textContent = `Flying to ${cont.name}…`;
+  const isl = ISLAND_BY_ID[id];
+  if (!isl) return;
+  $('loading-text').textContent = `Flying to ${isl.name}…`;
   $('loading').classList.remove('hidden');
   paused = true;
   await new Promise((r) => setTimeout(r, 60)); // let the loading screen show
   if (world) { scene.remove(world.group); world.dispose(); world = null; }
   const found = new Set(Object.keys(save.found));
-  world = await buildWorld(cont, countriesIn(id), found, { anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()) });
+  world = await buildWorld(planIsland(id), found, { anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()) });
   scene.add(world.group);
   const p = save.pos[id] || world.spawn;
   player.x = p.x; player.z = p.z; player.y = world.heightAt(p.x, p.z); player.vy = 0;
@@ -120,15 +132,20 @@ function collect(f) {
   if (hint === f.code) setHint(null);
   UI.updateCounter();
   const c = BY_CODE[f.code];
-  queue = queue.then(() => UI.showFound(c)).then(() => checkCelebrations(c.continent));
+  queue = queue.then(() => UI.showFound(c)).then(() => checkCelebrations(c.continent, islandOf(c.code)));
 }
 
-async function checkCelebrations(contId) {
+async function checkCelebrations(contId, islId) {
+  const ik = `island-${save.seed}-${islId}`;
+  if (codesOn(islId).every((code) => save.found[code]) && !save.celebrated[ik]) {
+    save.celebrated[ik] = 1; writeSave(save);
+    await UI.celebrate(false, `You found every flag on ${ISLAND_BY_ID[islId].name}!`, 'Open the Map to fly to another island.');
+  }
   const list = countriesIn(contId);
   const cont = CONTINENT_BY_ID[contId];
   if (list.every((c) => save.found[c.code]) && save.celebrated[contId] !== list.length) {
     save.celebrated[contId] = list.length; writeSave(save);
-    await UI.celebrate(false, `You found every flag in ${cont.name}!`, `That's all ${list.length} flags. Amazing!`);
+    await UI.celebrate(false, `You found every flag from ${cont.name}!`, `That's all ${list.length} countries. Amazing!`);
   }
   const total = ACTIVE_COUNTRIES.length;
   if (ACTIVE_COUNTRIES.every((c) => save.found[c.code]) && save.celebrated.all !== total) {
@@ -225,7 +242,7 @@ function frame(now) {
     const right = Math.cos(cam.yaw) * dx + -Math.sin(cam.yaw) * dz;
     UI.updateHintGuide({ code: hint, angle: Math.atan2(right, fwd), dist: Math.hypot(dx, dz) });
   } else if (hint) {
-    UI.updateHintGuide({ code: hint, elsewhere: CONTINENT_BY_ID[BY_CODE[hint].continent].name });
+    UI.updateHintGuide({ code: hint, elsewhere: ISLAND_BY_ID[islandOf(hint)].name });
   } else UI.updateHintGuide(null);
 
   miniTimer -= dt;
@@ -233,20 +250,20 @@ function frame(now) {
   saveTimer -= dt;
   if (saveTimer <= 0) {
     saveTimer = 3;
-    save.pos[world.cont.id] = { x: Math.round(player.x * 10) / 10, z: Math.round(player.z * 10) / 10, yaw: Math.round(cam.yaw * 100) / 100 };
+    save.pos[world.island.id] = { x: Math.round(player.x * 10) / 10, z: Math.round(player.z * 10) / 10, yaw: Math.round(cam.yaw * 100) / 100 };
     writeSave(save);
   }
 }
 requestAnimationFrame(frame);
 
 // ---------- start screen ----------
-const startId = save.last && isContinentOpen(save.last) ? save.last : 'europe';
+const startId = save.last || ISLANDS[0].id;
 const nFound = ACTIVE_COUNTRIES.filter((c) => save.found[c.code]).length;
 $('start-progress').textContent = nFound ? `You have found ${nFound} of ${ACTIVE_COUNTRIES.length} flags.` : `There are ${ACTIVE_COUNTRIES.length} flags to find.`;
 $('start-tip').textContent = window.navigator.standalone ? '' : 'Tip for grown-ups: tap Share, then "Add to Home Screen" to play full screen.';
 ACTIVE_COUNTRIES.forEach((c) => { if (save.found[c.code]) flagCanvas(c.code); });
 
-loadGeo().then(() => {
+{
   const b = $('btn-play');
   b.disabled = false;
   b.textContent = nFound ? 'Keep playing' : 'Play';
@@ -256,11 +273,11 @@ loadGeo().then(() => {
     $('hud').classList.remove('hidden');
     await travel(startId);
   }, { once: true });
-});
+}
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && world) {
-    save.pos[world.cont.id] = { x: player.x, z: player.z, yaw: cam.yaw };
+    save.pos[world.island.id] = { x: player.x, z: player.z, yaw: cam.yaw };
     writeSave(save);
   }
 });

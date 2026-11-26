@@ -1,6 +1,6 @@
 # Notes for AI coding assistants
 
-Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari. Read [README.md](README.md) first, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the rules it must follow.
+Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari, played on six random made-up islands. Read [README.md](README.md) first, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the rules it must follow.
 
 ## Must keep true
 
@@ -8,6 +8,7 @@ Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari. Read [RE
 - **No sound effects or music.** The only audio is spoken country names (`src/speech.js`).
 - **No backend, accounts, ads, tracking or links out of the game.** Everything is bundled. Don't load fonts, images or scripts from other sites.
 - **Never lose saved flags.** Progress is in `localStorage['flag-explorer-save-v1']`, keyed by country code. If you change the format, still read the old data. Don't rename country codes.
+- **The world is random, not the real map** (the child asked for this). Flags are scattered at random across the islands, not next to their neighbours. Don't bring back real-map placement.
 - **iPad Safari first:** big touch targets, simple words, landscape. Test touch paths (`touchstart`), not only mouse.
 - Don't copy any existing game's name, characters or assets.
 
@@ -23,13 +24,15 @@ Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari. Read [RE
 
 - Country list, positions, pronunciations: `src/data/countries.js`
 - Fun facts (two per country, short, simple words, accurate): `src/data/facts.js`
-- Continents (map area, world size): `src/data/continents.js`
-- World generation: `src/world.js` · game loop: `src/main.js` · screens: `src/ui.js` + `index.html` + `src/style.css`
+- Islands (names, colours, size, flag spacing, random shapes, flag spots): `src/islands.js`
+- Real continents (only for grouping and celebrations): `src/data/continents.js`
+- 3D world building: `src/world.js` · game loop: `src/main.js` · screens: `src/ui.js` + `index.html` + `src/style.css`
 
 ## Gotchas
 
 - The terrain mesh and the player both use `heightAt()`. Change heights there, not on the mesh.
-- Flags are pushed `MIN_GAP` steps apart after projection. Moving a lat/lon can move its neighbours too.
-- Oceania crosses the date line. `proj.norm` and the ring unwrapping in `geo.js` handle it.
-- Reset must stop all saving until the reload, or the page writes the old flags back (see `save.js`).
+- Everything random comes from `save.seed` through `rng()`. Don't use `Math.random()` for the world, or the islands would change every visit.
+- Changing the island code (shapes, flag spots, the shuffle) changes every player's world on the next update. Found flags are safe, but unfound flags move. That's fine, just know it.
+- Reset and New random world must stop all saving until the reload, or the page writes old data back (see `save.js`).
+- Vite's file watcher can miss edits in this OneDrive folder. If the browser runs old code, restart `npm run dev`.
 - Fast mode reloads the page on purpose (antialiasing can't change after start).

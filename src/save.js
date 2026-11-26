@@ -2,7 +2,9 @@
 // so it survives closing the game and game updates.
 const KEY = 'flag-explorer-save-v1';
 
-const fresh = () => ({ found: {}, last: null, pos: {}, celebrated: {}, settings: { voice: true, fast: false } });
+// seed = which random world this save plays on (island shapes and where each flag is)
+export const newSeed = () => Math.floor(Math.random() * 2 ** 31) + 1;
+const fresh = () => ({ found: {}, seed: newSeed(), last: null, pos: {}, celebrated: {}, settings: { voice: true, fast: false } });
 
 export function loadSave() {
   try {
@@ -31,3 +33,6 @@ export function resetSave(s) {
   } catch { /* ignore */ }
   locked = true;
 }
+
+// Stops all saving until the page reloads (used when making a new world).
+export function lockSave() { locked = true; }

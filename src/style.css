@@ -153,3 +153,4 @@ button { font: inherit; touch-action: manipulation; cursor: pointer; border: 0; 
   #counter { font-size: 22px; padding: 8px 18px; }
   #btn-jump { width: 110px; height: 110px; }
 }
+.set-note { font-size: 15px; color: #567; margin: 6px 0 0; }

@@ -1,11 +1,12 @@
-// Each continent is its own walkable world. lon/lat = the slice of the real map it covers.
-// size = how many steps across its longest side is.
+// The real continents. The game world is made-up islands (see islands.js), but each
+// country still belongs to its real continent: My Flags groups flags by continent,
+// the flag popup says where the country really is, and finishing a continent celebrates.
 export const CONTINENTS = [
-  { id: 'northAmerica', name: 'North America', lon: [-170, -52], lat: [6, 72], size: 660, color: '#5fcf7f', label: [45, -100] },
-  { id: 'southAmerica', name: 'South America', lon: [-84, -32], lat: [-56, 14], size: 520, color: '#ff8aa6', label: [-15, -60] },
-  { id: 'europe', name: 'Europe', lon: [-25, 45], lat: [34, 71.5], size: 640, color: '#6cb2ff', label: [54, 15] },
-  { id: 'africa', name: 'Africa', lon: [-26, 60], lat: [-36, 38], size: 680, color: '#f5cf4a', label: [5, 20] },
-  { id: 'asia', name: 'Asia', lon: [25, 147], lat: [-11, 56], size: 720, color: '#ffa94d', label: [42, 95] },
-  { id: 'oceania', name: 'Oceania', lon: [110, 192], lat: [-48, 12], size: 620, color: '#b993ff', label: [-25, 140] },
+  { id: 'northAmerica', name: 'North America' },
+  { id: 'southAmerica', name: 'South America' },
+  { id: 'europe', name: 'Europe' },
+  { id: 'africa', name: 'Africa' },
+  { id: 'asia', name: 'Asia' },
+  { id: 'oceania', name: 'Oceania' },
 ];
 export const CONTINENT_BY_ID = Object.fromEntries(CONTINENTS.map((c) => [c.id, c]));

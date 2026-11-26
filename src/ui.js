@@ -3,8 +3,8 @@
 import { CONTINENTS, CONTINENT_BY_ID } from './data/continents.js';
 import { BY_CODE } from './data/countries.js';
 import { FACTS } from './data/facts.js';
-import { ACTIVE_COUNTRIES, countriesIn, isContinentOpen, FLAG_URL, TEST_BUILD } from './config.js';
-import { drawWorld, worldXY, WORLD_VIEW, nearestCountry } from './geo.js';
+import { ACTIVE_COUNTRIES, countriesIn, FLAG_URL } from './config.js';
+import { ISLANDS, ISLAND_BY_ID, codesOn, planIsland, paintIsland, WATER } from './islands.js';
 import { flagReady, flagCanvas } from './flags.js';
 import { say } from './speech.js';
 
@@ -54,11 +54,11 @@ export function updateCounter() {
   const total = ACTIVE_COUNTRIES.length;
   const n = ACTIVE_COUNTRIES.filter((c) => G.save.found[c.code]).length;
   $('count-num').textContent = `${n} / ${total}`;
-  const cont = G.world?.cont;
-  if (cont) {
-    const list = countriesIn(cont.id);
-    const k = list.filter((c) => G.save.found[c.code]).length;
-    $('where').textContent = `${cont.name}: ${k} of ${list.length}`;
+  const isl = G.world?.island;
+  if (isl) {
+    const list = codesOn(isl.id);
+    const k = list.filter((code) => G.save.found[code]).length;
+    $('where').textContent = `${isl.name}: ${k} of ${list.length}`;
   }
 }
 
@@ -68,7 +68,7 @@ export function showFound(country, title = 'You found a flag!') {
   shownCountry = country;
   $('found-flag').src = FLAG_URL(country.code);
   $('found-name').textContent = country.name;
-  $('found-where').textContent = CONTINENT_BY_ID[country.continent].name;
+  $('found-where').textContent = `A country in ${CONTINENT_BY_ID[country.continent].name}`;
   document.querySelector('.found-title').textContent = title;
   const facts = $('found-facts');
   facts.innerHTML = '';
@@ -125,16 +125,16 @@ function renderHintList() {
   const q = norm($('hint-search').value.trim());
   const box = $('hint-list');
   box.innerHTML = '';
-  const here = G.world?.cont.id;
-  const order = [here, ...CONTINENTS.map((c) => c.id).filter((id) => id !== here)];
+  const here = G.world?.island.id;
+  const order = [here, ...ISLANDS.map((i) => i.id).filter((id) => id !== here)];
   let shown = 0;
   for (const id of order) {
-    const list = countriesIn(id).filter((c) => !G.save.found[c.code] && (!q || norm(c.name).includes(q)))
+    const list = codesOn(id).map((code) => BY_CODE[code]).filter((c) => !G.save.found[c.code] && (!q || norm(c.name).includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!list.length) continue;
     const head = document.createElement('div');
     head.className = 'hint-head';
-    head.textContent = id === here ? `Here in ${CONTINENT_BY_ID[id].name}` : `In ${CONTINENT_BY_ID[id].name}`;
+    head.textContent = id === here ? `Here on ${ISLAND_BY_ID[id].name}` : `On ${ISLAND_BY_ID[id].name}`;
     box.appendChild(head);
     for (const c of list) {
       const row = document.createElement('button');
@@ -158,7 +158,7 @@ export function updateHintGuide(info) {
   $('hint-flag').src = FLAG_URL(info.code);
   if (info.elsewhere) {
     $('hint-arrow').style.display = 'none';
-    $('hint-dist').textContent = `${BY_CODE[info.code].name} is in ${info.elsewhere}`;
+    $('hint-dist').textContent = `${BY_CODE[info.code].name} is on ${info.elsewhere}`;
   } else {
     $('hint-arrow').style.display = '';
     $('hint-arrow').style.transform = `rotate(${info.angle - Math.PI / 2}rad)`;
@@ -182,7 +182,7 @@ export function drawMinimap() {
   const s = Math.min(maxW / w.W, maxH / w.H);
   const cw = Math.round(w.W * s), ch = Math.round(w.H * s);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const key = `${w.cont.id}|${cw}|${ch}|${Object.keys(G.save.found).length}|${flagReady.size}`;
+  const key = `${w.island.id}|${cw}|${ch}|${Object.keys(G.save.found).length}|${flagReady.size}`;
   if (key !== miniKey) {
     miniKey = key;
     cv.width = cw * dpr; cv.height = ch * dpr;
@@ -223,9 +223,11 @@ function drawPlayer(ctx, x, y, face, r) {
 }
 
 // ---------- Full map ----------
-let mapView = 'here', worldCanvas = null, pulseCont = null;
+let mapView = 'here', pulseIsland = null;
+const thumbs = {}; // small painted map of each island, for the World tab
+const GRID_COLS = Math.min(3, ISLANDS.length), GRID_ROWS = Math.ceil(ISLANDS.length / GRID_COLS);
 export function openMap(view, pulse) {
-  if (pulse !== undefined) pulseCont = pulse;
+  if (pulse !== undefined) pulseIsland = pulse;
   mapView = view;
   if (!openModals.has('mapscreen')) openModal('mapscreen');
   $('tab-here').classList.toggle('on', view === 'here');
@@ -236,7 +238,7 @@ export function openMap(view, pulse) {
   labels.innerHTML = '';
   const hw = holder.clientWidth, hh = holder.clientHeight;
   const w = G.world;
-  const aspect = view === 'here' ? w.W / w.H : 360 / (WORLD_VIEW.lat[0] - WORLD_VIEW.lat[1]) / 1.1;
+  const aspect = view === 'here' ? w.W / w.H : GRID_COLS / GRID_ROWS;
   let cw = hw, ch = hw / aspect;
   if (ch > hh) { ch = hh; cw = hh * aspect; }
   wrap.style.width = cw + 'px'; wrap.style.height = ch + 'px';
@@ -267,51 +269,58 @@ export function openMap(view, pulse) {
       ctx.fillText('⭐', x, y);
     }
     drawPlayer(ctx, (G.player.x + w.W / 2) * k, (G.player.z + w.H / 2) * k, G.player.face, 11 * dpr);
-    const list = countriesIn(w.cont.id);
-    const got = list.filter((c) => G.save.found[c.code]).length;
-    $('map-note').textContent = `${w.cont.name}: you found ${got} of ${list.length} flags. The red arrow is you.${hf ? ' The star is your hint.' : ''}`;
+    const list = codesOn(w.island.id);
+    const got = list.filter((code) => G.save.found[code]).length;
+    $('map-note').textContent = `${w.island.name}: you found ${got} of ${list.length} flags. The red arrow is you.${hf ? ' The star is your hint.' : ''}`;
   } else {
-    if (!worldCanvas) worldCanvas = drawWorld(2048, Math.round(2048 / aspect), isContinentOpen);
-    ctx.drawImage(worldCanvas, 0, 0, cv.width, cv.height);
+    // all islands in a grid; tap one to fly there
+    ctx.fillStyle = WATER;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    const cellW = cv.width / GRID_COLS, cellH = cv.height / GRID_ROWS;
     const small = 14 * dpr;
-    for (const c of ACTIVE_COUNTRIES) {
-      if (!G.save.found[c.code]) continue;
-      const img = flagReady.get(c.code);
-      if (!img) { flagCanvas(c.code); continue; }
-      const [x, y] = worldXY(c.lat, c.lon, cv.width, cv.height);
-      ctx.drawImage(img, x - small / 2, y - small * 0.375, small, small * 0.75);
-    }
-    for (const cont of CONTINENTS) {
-      const [x, y] = worldXY(cont.label[0], cont.label[1], 100, 100);
-      const b = document.createElement('button');
-      const list = countriesIn(cont.id);
-      const open = isContinentOpen(cont.id);
-      b.className = 'cont-label' + (cont.id === w.cont.id ? ' here' : '') + (pulseCont === cont.id ? ' pulse' : '') + (open ? '' : ' locked');
-      b.style.left = x + '%'; b.style.top = y + '%';
-      b.innerHTML = `${cont.name}<small>${open ? (cont.id === w.cont.id ? 'You are here' : `${list.filter((c) => G.save.found[c.code]).length} of ${list.length} found`) : 'Coming soon'}</small>`;
-      b.addEventListener('click', () => flyTo(cont.id));
-      labels.appendChild(b);
-    }
-    $('map-note').textContent = TEST_BUILD ? 'Test version: only Europe is open for now.' : 'Tap a continent to fly there.';
+    ISLANDS.forEach((isl, n) => {
+      const plan = planIsland(isl.id);
+      if (!thumbs[isl.id]) thumbs[isl.id] = paintIsland(plan, 0.5);
+      const size = Math.min(cellW, cellH) * 0.92;
+      const ox = (n % GRID_COLS) * cellW + (cellW - size) / 2, oy = Math.floor(n / GRID_COLS) * cellH + (cellH - size) / 2;
+      ctx.drawImage(thumbs[isl.id], ox, oy, size, size);
+      const k = size / plan.W;
+      for (const f of plan.flags) {
+        if (!G.save.found[f.code]) continue;
+        const img = flagReady.get(f.code);
+        if (!img) { flagCanvas(f.code); continue; }
+        const x = ox + (f.x + plan.W / 2) * k, y = oy + (f.z + plan.H / 2) * k;
+        ctx.drawImage(img, x - small / 2, y - small * 0.375, small, small * 0.75);
+      }
+      const list = plan.flags;
+      const got = list.filter((f) => G.save.found[f.code]).length;
+      const lb = document.createElement('button');
+      lb.className = 'cont-label' + (isl.id === w.island.id ? ' here' : '') + (pulseIsland === isl.id ? ' pulse' : '');
+      lb.style.left = (((n % GRID_COLS) + 0.5) / GRID_COLS) * 100 + '%';
+      lb.style.top = ((Math.floor(n / GRID_COLS) + 0.86) / GRID_ROWS) * 100 + '%';
+      lb.style.borderBottom = `6px solid ${isl.color}`;
+      lb.innerHTML = `${isl.name}<small>${isl.id === w.island.id ? 'You are here' : `${got} of ${list.length} found`}</small>`;
+      lb.addEventListener('click', () => flyTo(isl.id));
+      labels.appendChild(lb);
+    });
+    $('map-note').textContent = 'Tap an island to fly there.';
   }
 }
 
-// taps on the world map (not on a label) pick the continent under your finger
+// taps on the world map (not on a label) pick the island under your finger
 $('map-canvas').addEventListener('click', (e) => {
   if (mapView !== 'world') return;
   const r = e.target.getBoundingClientRect();
-  const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
-  const lon = WORLD_VIEW.lon[0] + fx * 360;
-  const lat = WORLD_VIEW.lat[0] - fy * (WORLD_VIEW.lat[0] - WORLD_VIEW.lat[1]);
-  const { country, degrees } = nearestCountry(lat, lon);
-  if (degrees < 25) flyTo(lat > 60 && lon < -10 && lon > -75 ? 'northAmerica' : country.continent);
+  const col = Math.floor(((e.clientX - r.left) / r.width) * GRID_COLS);
+  const row = Math.floor(((e.clientY - r.top) / r.height) * GRID_ROWS);
+  const isl = ISLANDS[row * GRID_COLS + col];
+  if (isl) flyTo(isl.id);
 });
 
 function flyTo(id) {
-  if (!isContinentOpen(id)) { $('map-note').textContent = `${CONTINENT_BY_ID[id].name} is coming soon!`; return; }
-  pulseCont = null;
+  pulseIsland = null;
   closeModal('mapscreen');
-  if (id !== G.world.cont.id) G.travel(id);
+  if (id !== G.world.island.id) G.travel(id);
 }
 
 // ---------- Settings ----------
@@ -319,6 +328,8 @@ function openSettings() {
   $('set-voice').checked = G.save.settings.voice;
   $('set-fast').checked = G.save.settings.fast;
   $('version').textContent = `Version: ${__BUILD_TIME__}`;
+  delete $('btn-newworld').dataset.sure;
+  $('btn-newworld').querySelector('.lbl').textContent = 'New random world';
   const fsOK = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   $('btn-fullscreen').classList.toggle('hidden', !fsOK || window.navigator.standalone);
   openModal('settings');
@@ -329,6 +340,11 @@ function initSettings() {
   $('btn-fullscreen').addEventListener('click', () => {
     const el = document.documentElement;
     (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  });
+  $('btn-newworld').addEventListener('click', () => {
+    const b = $('btn-newworld');
+    if (b.dataset.sure) G.newWorld();
+    else { b.dataset.sure = '1'; b.querySelector('.lbl').textContent = 'Tap again to make a new world'; }
   });
   const btn = $('btn-reset'), fill = $('reset-fill');
   let timer = null, start = 0;
