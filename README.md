@@ -128,9 +128,12 @@ Progress is stored only in the browser (`localStorage`, key `flag-explorer-save-
 
 ---
 
+## License
+
+The game's code is under the [MIT License](LICENSE): anyone may use, copy, change and share it, as long as they keep the license notice. The flag images and map data keep their own licenses, listed below.
+
 ## Credits
 
 - Flag images: [flag-icons](https://github.com/lipis/flag-icons) (MIT license), bundled locally.
 - Map shapes: [world-atlas](https://github.com/topojson/world-atlas), from [Natural Earth](https://www.naturalearthdata.com/) (public domain).
 - 3D: [three.js](https://threejs.org/) (MIT). Build tool: [Vite](https://vite.dev/) (MIT).
-- The game's own code has no license file yet, so others may read it but have no stated right to reuse it. Add a `LICENSE` file if you want to allow that.
