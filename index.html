@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Flag Explorer</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Flag Explorer" />
+  <meta name="theme-color" content="#8fd3ff" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icon-180.png" />
+  <link rel="icon" type="image/png" href="./icon-192.png" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="game"></div>
+  <div id="touch-layer"></div>
+
+  <div id="hud" class="hidden">
+    <canvas id="minimap"></canvas>
+    <div id="top-mid">
+      <div id="counter"><span id="count-num">0 / 0</span> found</div>
+      <div id="where"></div>
+      <div id="hint-guide" class="hidden">
+        <div id="hint-arrow">➜</div>
+        <div id="hint-text"><img id="hint-flag" alt="" /><span id="hint-dist"></span></div>
+        <button id="hint-stop" class="small-btn">Stop hint</button>
+      </div>
+    </div>
+    <div id="side-buttons">
+      <button id="btn-map" class="big-btn"><span class="ico">🗺️</span>Map</button>
+      <button id="btn-hint" class="big-btn"><span class="ico">💡</span>Hint</button>
+      <button id="btn-flags" class="big-btn"><span class="ico">🚩</span>My Flags</button>
+      <button id="btn-settings" class="gear-btn" aria-label="Settings">⚙️</button>
+    </div>
+    <div id="joy-base"><div id="joy-knob"></div></div>
+    <button id="btn-jump">Jump</button>
+  </div>
+
+  <div id="banner" class="hidden">
+    <div id="banner-text"></div>
+    <div class="row">
+      <button id="banner-go" class="pill-btn">Open the Map</button>
+      <button id="banner-close" class="pill-btn grey">OK</button>
+    </div>
+  </div>
+
+  <!-- start screen -->
+  <div id="start" class="screen">
+    <div class="start-card">
+      <div class="title-flags">🚩🌍🚩</div>
+      <h1>Flag Explorer</h1>
+      <p>Walk around the world. Find the hidden flags!</p>
+      <p id="start-progress"></p>
+      <button id="btn-play" class="huge-btn" disabled>Loading…</button>
+      <p class="tip" id="start-tip"></p>
+    </div>
+  </div>
+
+  <!-- found a flag -->
+  <div id="found" class="modal hidden">
+    <div class="card found-card">
+      <div class="found-title">You found a flag!</div>
+      <img id="found-flag" alt="" />
+      <div id="found-name"></div>
+      <div id="found-where"></div>
+      <ul id="found-facts"></ul>
+      <div class="row">
+        <button id="found-say" class="pill-btn">🔊 Say it again</button>
+        <button id="found-ok" class="pill-btn green">OK!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- my flags -->
+  <div id="myflags" class="modal hidden">
+    <div class="card wide">
+      <div class="card-head"><h2>My Flags</h2><button class="close-btn" data-close="myflags">✕</button></div>
+      <div id="myflags-list" class="scroll"></div>
+    </div>
+  </div>
+
+  <!-- hints -->
+  <div id="hints" class="modal hidden">
+    <div class="card wide">
+      <div class="card-head"><h2>Which flag do you want to find?</h2><button class="close-btn" data-close="hints">✕</button></div>
+      <input id="hint-search" type="search" placeholder="Type a country name…" autocomplete="off" autocorrect="off" spellcheck="false" />
+      <div id="hint-list" class="scroll"></div>
+    </div>
+  </div>
+
+  <!-- map -->
+  <div id="mapscreen" class="modal hidden">
+    <div class="card full">
+      <div class="card-head">
+        <div class="tabs">
+          <button id="tab-here" class="tab">This continent</button>
+          <button id="tab-world" class="tab">🌍 World — fly somewhere</button>
+        </div>
+        <button class="close-btn" data-close="mapscreen">✕</button>
+      </div>
+      <div id="map-holder">
+        <div id="map-wrap"><canvas id="map-canvas"></canvas><div id="map-labels"></div></div>
+      </div>
+      <div id="map-note"></div>
+    </div>
+  </div>
+
+  <!-- settings -->
+  <div id="settings" class="modal hidden">
+    <div class="card">
+      <div class="card-head"><h2>Settings</h2><button class="close-btn" data-close="settings">✕</button></div>
+      <label class="setting"><input type="checkbox" id="set-voice" /> Say country names out loud</label>
+      <label class="setting"><input type="checkbox" id="set-fast" /> Fast mode (smoother on older iPads)</label>
+      <button id="btn-fullscreen" class="pill-btn">Full screen</button>
+      <div class="reset-box">
+        <p>For grown-ups: hold the button for 3 seconds to erase all found flags.</p>
+        <button id="btn-reset" class="pill-btn red"><span id="reset-fill"></span><span class="lbl">Hold to reset</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- celebrations -->
+  <div id="celebrate" class="modal hidden">
+    <canvas id="confetti"></canvas>
+    <div class="card celebrate-card">
+      <div id="cel-icon"></div>
+      <div id="cel-text"></div>
+      <div id="cel-sub"></div>
+      <button id="cel-ok" class="pill-btn green">Yay!</button>
+    </div>
+  </div>
+
+  <div id="loading" class="screen hidden"><div class="loading-card"><div class="plane">✈️</div><div id="loading-text">Flying…</div></div></div>
+  <div id="rotate" class="screen"><div class="loading-card">Turn your iPad sideways to play 🔄</div></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
