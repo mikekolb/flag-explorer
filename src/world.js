@@ -1,13 +1,14 @@
-// Builds one island in 3D: terrain, sea, trees, houses, hills, caves and the hidden
-// flags. The land shape and flag spots come from planIsland() in islands.js.
+// Builds one region (an island or a real continent) in 3D: terrain, sea, trees, houses,
+// hills, caves and the hidden flags. The land shape and flag spots come from the plan
+// (planIsland() in islands.js or planContinent() in earth.js).
 import * as THREE from 'three';
-import { baseHeight, paintIsland } from './islands.js';
+import { baseHeight } from './islands.js';
 import { rng, fbm, smoothstep } from './noise.js';
 import { flagCanvas } from './flags.js';
 
 export async function buildWorld(plan, found, opts = {}) {
-  const { island, W, H, land, soft } = plan;
-  const R = rng(island.id + '-world');
+  const { region, W, H, land, soft } = plan;
+  const R = rng(region.id + '-world');
   const flags = plan.flags.map((p) => ({ code: p.code, x: p.x, z: p.z }));
 
   // ---- 1. hiding spot for each flag (the spots themselves come from the plan) ----
@@ -43,8 +44,8 @@ export async function buildWorld(plan, found, opts = {}) {
   const disposables = [];
   const keep = (o) => { disposables.push(o); return o; };
 
-  // ---- 3. terrain mesh with the island map painted on it ----
-  const groundCanvas = paintIsland(plan, Math.min(2.5, 2048 / Math.max(W, H)));
+  // ---- 3. terrain mesh with the map painted on it ----
+  const groundCanvas = plan.paint(Math.min(plan.pxMax || 2.5, 2048 / Math.max(W, H)));
   const tex = keep(new THREE.CanvasTexture(groundCanvas));
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = opts.anisotropy || 1;
@@ -130,7 +131,7 @@ export async function buildWorld(plan, found, opts = {}) {
   const cz = flags.reduce((s, f) => s + f.z, 0) / Math.max(1, flags.length);
   for (const f of flags) {
     if (f.type !== 'house') continue;
-    // put the house between the flag and the middle of the island, so the flag hides behind it
+    // put the house between the flag and the middle of the region, so the flag hides behind it
     let dx = cx - f.x, dz = cz - f.z;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
@@ -298,7 +299,7 @@ export async function buildWorld(plan, found, opts = {}) {
   }
 
   return {
-    island, W, H, group, flags, caves, groundCanvas, spawn, heightAt, resolve,
+    region, W, H, group, flags, caves, groundCanvas, spawn, heightAt, resolve,
     markCollected(code) {
       const f = flags.find((x) => x.code === code);
       if (!f) return;

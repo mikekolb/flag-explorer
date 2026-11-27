@@ -52,7 +52,7 @@
     <div class="start-card">
       <div class="title-flags">🚩🌍🚩</div>
       <h1>Flag Explorer</h1>
-      <p>Explore the islands. Find the hidden flags!</p>
+      <p>Explore the map. Find the hidden flags!</p>
       <p id="start-progress"></p>
       <button id="btn-play" class="huge-btn" disabled>Loading…</button>
       <p class="tip" id="start-tip"></p>
@@ -112,11 +112,18 @@
   <div id="settings" class="modal hidden">
     <div class="card">
       <div class="card-head"><h2>Settings</h2><button class="close-btn" data-close="settings">✕</button></div>
+      <div class="map-pick">
+        <div class="map-pick-title">Which map?</div>
+        <button id="map-islands" class="map-choice">🏝️ Made-up islands</button>
+        <button id="map-earth" class="map-choice">🌍 Real world</button>
+      </div>
       <label class="setting"><input type="checkbox" id="set-voice" /> Say country names out loud</label>
       <label class="setting"><input type="checkbox" id="set-fast" /> Fast mode (smoother on older iPads)</label>
       <button id="btn-fullscreen" class="pill-btn">Full screen</button>
-      <button id="btn-newworld" class="pill-btn green"><span class="lbl">New random world</span></button>
-      <p class="set-note">Makes new islands and hides the flags you have not found in new places. Found flags stay found.</p>
+      <div id="newworld-box">
+        <button id="btn-newworld" class="pill-btn green"><span class="lbl">New random world</span></button>
+        <p class="set-note">Makes new islands and hides the flags you have not found in new places. Found flags stay found.</p>
+      </div>
       <div class="reset-box">
         <p>For grown-ups: hold the button for 3 seconds to erase all found flags.</p>
         <button id="btn-reset" class="pill-btn red"><span id="reset-fill"></span><span class="lbl">Hold to reset</span></button>

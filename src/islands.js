@@ -43,7 +43,7 @@ export const baseHeight = (soft, x, z) => {
   return -0.8 + m * (1.1 + fbm(x * 0.018, z * 0.018) * 3.2);
 };
 
-function sampler(m, W, H) {
+export function sampler(m, W, H) {
   return (x, z) => {
     const gx = Math.min(m.w - 1.001, Math.max(0, (x + W / 2) / m.cell - 0.5));
     const gz = Math.min(m.h - 1.001, Math.max(0, (z + H / 2) / m.cell - 0.5));
@@ -54,7 +54,7 @@ function sampler(m, W, H) {
   };
 }
 
-function blur(m, passes) {
+export function blur(m, passes) {
   let src = m.arr;
   for (let p = 0; p < passes; p++) {
     const out = new Float32Array(src.length);
@@ -144,7 +144,7 @@ export function planIsland(id) {
     const x = (i + 0.5) * CELL - W / 2, z = (j + 0.5) * CELL - H / 2;
     if (Math.hypot(x, z) < W * 0.3 && arr[j * w + i]) { cx += x; cz += z; n++; }
   }
-  const plan = { island: isl, W, H, mask, land, soft, flags, center: n ? { x: cx / n, z: cz / n } : { x: 0, z: 0 } };
+  const plan = { region: isl, W, H, mask, land, soft, flags, center: n ? { x: cx / n, z: cz / n } : { x: 0, z: 0 }, paint: (px) => paintIsland(plan, px) };
   plans[id] = plan;
   return plan;
 }
@@ -163,10 +163,10 @@ export function paintIsland(plan, px) {
   const ctx = cv.getContext('2d');
   const img = ctx.createImageData(cw, ch);
   const d = img.data;
-  const pal = plan.island.patches.map(hex);
+  const pal = plan.region.patches.map(hex);
   // patch centres on a jittered grid (Voronoi), so they look like little regions
   const G = 70, gw = Math.ceil(W / G) + 2;
-  const R = rng(plan.island.id + seed);
+  const R = rng(plan.region.id + seed);
   const cells = [];
   for (let j = 0; j < gw; j++) for (let i = 0; i < gw; i++) {
     cells.push({ x: (i - 1 + 0.15 + R() * 0.7) * G - W / 2, z: (j - 1 + 0.15 + R() * 0.7) * G - H / 2, c: pal[Math.floor(R() * pal.length)] });

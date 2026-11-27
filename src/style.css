@@ -154,3 +154,7 @@ button { font: inherit; touch-action: manipulation; cursor: pointer; border: 0; 
   #btn-jump { width: 110px; height: 110px; }
 }
 .set-note { font-size: 15px; color: #567; margin: 6px 0 0; }
+.map-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+.map-pick-title { width: 100%; font-size: 21px; font-weight: 800; }
+.map-choice { flex: 1; min-height: 64px; font-size: 21px; font-weight: 800; border-radius: 18px; border: 4px solid #dde4ea; background: #f4f7fa; color: #345; }
+.map-choice.on { border-color: #2fb85a; background: #e4f8ea; }

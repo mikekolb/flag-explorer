@@ -1,6 +1,6 @@
 # Notes for AI coding assistants
 
-Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari, played on six random made-up islands. Read [README.md](README.md) first, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the rules it must follow.
+Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari, with two maps: six random made-up islands (default) or the real world continents. Read [README.md](README.md) first, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the rules it must follow.
 
 ## Must keep true
 
@@ -8,7 +8,7 @@ Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari, played o
 - **No sound effects or music.** The only audio is spoken country names (`src/speech.js`).
 - **No backend, accounts, ads, tracking or links out of the game.** Everything is bundled. Don't load fonts, images or scripts from other sites.
 - **Never lose saved flags.** Progress is in `localStorage['flag-explorer-save-v1']`, keyed by country code. If you change the format, still read the old data. Don't rename country codes.
-- **The world is random, not the real map** (the child asked for this). Flags are scattered at random across the islands, not next to their neighbours. Don't bring back real-map placement.
+- **Two maps, both kept** (the child asked for both). Made-up islands: flags scattered at random, not next to their neighbours. Real world: flags near their real spots. The choice is `save.settings.map` ('islands' or 'earth'). Found flags count on both.
 - **iPad Safari first:** big touch targets, simple words, landscape. Test touch paths (`touchstart`), not only mouse.
 - Don't copy any existing game's name, characters or assets.
 
@@ -24,15 +24,19 @@ Flag Explorer: a 3D flag-hunting game for a young child on iPad Safari, played o
 
 - Country list, positions, pronunciations: `src/data/countries.js`
 - Fun facts (two per country, short, simple words, accurate): `src/data/facts.js`
-- Islands (names, colours, size, flag spacing, random shapes, flag spots): `src/islands.js`
-- Real continents (only for grouping and celebrations): `src/data/continents.js`
-- 3D world building: `src/world.js` · game loop: `src/main.js` · screens: `src/ui.js` + `index.html` + `src/style.css`
+- Which map is on, and the region helpers the game uses: `src/maps.js`
+- Islands map (names, colours, size, flag spacing, random shapes, flag spots): `src/islands.js`
+- Real world map: `src/earth.js` (flag placement) + `src/geo.js` (map data, drawing) + `src/data/continents.js` (map area, world size)
+- 3D world building (for both maps): `src/world.js` · game loop: `src/main.js` · screens: `src/ui.js` + `index.html` + `src/style.css`
 
 ## Gotchas
 
 - The terrain mesh and the player both use `heightAt()`. Change heights there, not on the mesh.
-- Everything random comes from `save.seed` through `rng()`. Don't use `Math.random()` for the world, or the islands would change every visit.
+- Both maps make the same kind of "plan" (land, flag spots, a `paint(px)` function), so `world.js` builds either. Keep them in step.
+- In the code, one walkable island or continent is a "region". Use `maps.js` (`regionById`, `regionOf`, `codesIn`, `inOn`) instead of islands.js or continents directly.
+- Everything random on the islands map comes from `save.seed` through `rng()`. Don't use `Math.random()` for the world, or the islands would change every visit.
+- Real world: flags are pushed `MIN_GAP` steps apart after projection, so moving a lat/lon can move its neighbours. Oceania crosses the date line (`proj.norm` and the ring unwrapping in `geo.js`).
 - Changing the island code (shapes, flag spots, the shuffle) changes every player's world on the next update. Found flags are safe, but unfound flags move. That's fine, just know it.
 - Reset and New random world must stop all saving until the reload, or the page writes old data back (see `save.js`).
 - Vite's file watcher can miss edits in this OneDrive folder. If the browser runs old code, restart `npm run dev`.
-- Fast mode reloads the page on purpose (antialiasing can't change after start).
+- Fast mode and switching maps reload the page on purpose (antialiasing can't change after start).

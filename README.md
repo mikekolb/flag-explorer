@@ -1,8 +1,12 @@
 # Flag Explorer
 
-A bright, low-poly 3D game for iPad Safari. You explore six made-up islands and find the hidden flags of all **195 countries** (the 193 UN members plus Vatican City and Palestine). When you find a flag, the game shows it big, reads the country name out loud, and shows two fun facts.
+A bright, low-poly 3D game for iPad Safari. You explore a map and find the hidden flags of all **195 countries** (the 193 UN members plus Vatican City and Palestine). When you find a flag, the game shows it big, reads the country name out loud, and shows two fun facts.
 
-The islands are random. Each player gets their own world: random island shapes, and the flags scattered at random across all the islands (not next to their real neighbours).
+There are two maps, picked in Settings:
+- **Made-up islands** (the default): six random islands, with the flags scattered at random across them (not next to their real neighbours). Each player gets their own random world.
+- **Real world:** the six real continents shaped like the real map, with each flag near its real country.
+
+Found flags count on both maps.
 
 **Play it:** https://mikekolb.github.io/flag-explorer/ (iPad, landscape. Tap Share → *Add to Home Screen* for full screen.)
 
@@ -43,11 +47,11 @@ There are no tests, no backend, and no environment variables.
 - **Jump:** the big yellow button.
 - **Walk up to a flag** to collect it. A popup shows the flag, the country name (spoken aloud) and two fun facts.
 - **Counter** at the top: "47 / 195 found".
-- **Map:** shows this island with the flags you found. The **All islands** tab lets you tap an island to fly there.
-- **Hint:** pick any flag you haven't found. A big arrow and a step count guide you, a light beam marks the spot, and a star shows on the map. If it's on another island, the game tells you to fly there first. Hints are unlimited.
+- **Map:** shows this island (or continent) with the flags you found. The second tab shows all islands (or the world) so you can tap one to fly there.
+- **Hint:** pick any flag you haven't found. A big arrow and a step count guide you, a light beam marks the spot, and a star shows on the map. If it's on another island or continent, the game tells you to fly there first. Hints are unlimited.
 - **My Flags:** every flag you found, grouped by real continent. Tap one to see it again.
 - **Celebrations:** stars and confetti when an island is finished or every country from a real continent is found, and a trophy when all 195 are found.
-- **Settings (gear):** voice on/off, Fast mode, full screen, **New random world** (new islands, found flags stay found), the version number, and a **hold-for-3-seconds reset** for grown-ups.
+- **Settings (gear):** **Which map?** (Made-up islands or Real world), voice on/off, Fast mode, full screen, **New random world** (islands map only; found flags stay found), the version number, and a **hold-for-3-seconds reset** for grown-ups.
 
 ---
 
@@ -58,6 +62,8 @@ There are no tests, no backend, and no environment variables.
 | Change or add fun facts | Edit [`src/data/facts.js`](src/data/facts.js). Facts are keyed by two-letter country code. Facts show for flags found earlier too. |
 | Fix a country name or pronunciation | Edit [`src/data/countries.js`](src/data/countries.js). The optional 6th value is how the voice should say it. |
 | Change the islands (names, colours, size, how far apart flags are) | Edit the top of [`src/islands.js`](src/islands.js). |
+| Move a flag on the Real world map | Change the country's `lat`/`lon` in `countries.js`. Flags are spaced out automatically. |
+| Change a continent's size on the Real world map | Edit [`src/data/continents.js`](src/data/continents.js) (`size` = steps across the longest side). |
 | Go back to the small 10-flag test version | Set `TEST_BUILD = true` in [`src/config.js`](src/config.js). |
 | Make the game faster on old iPads | Players can turn on **Fast mode** in Settings. For everyone, lower the tree count or terrain detail in [`src/world.js`](src/world.js). |
 
@@ -85,8 +91,11 @@ scripts/copy-flags.mjs   Copies the 195 needed flag SVGs from the flag-icons pac
 scripts/make-icons.mjs   Draws the home-screen PNG icons with no extra libraries
 src/
   main.js       Starts everything: renderer, game loop, movement, collecting, travel, start screen
-  islands.js    The random world: island shapes, which flags go on which island, flag spots, painting the island maps
-  world.js      Builds one island in 3D: terrain, sea, trees, houses, hills, caves, flags, collisions
+  maps.js       Picks the map (islands or real world); the rest of the game asks it about regions
+  islands.js    Made-up islands map: island shapes, which flags go on which island, flag spots, painting
+  earth.js      Real world map: each continent shaped like the real map, flags near their real spots
+  geo.js        Real map data: lat/lon → world position, drawing land/borders, the world map
+  world.js      Builds one island or continent in 3D: terrain, sea, trees, houses, hills, caves, flags, collisions
   player.js     The low-poly kid character and its walk/jump animation
   controls.js   Touch joystick, drag-to-look, jump button, keyboard and mouse
   ui.js         Counter, flag popup, My Flags, hints, minimap, full map, settings, celebrations
@@ -97,8 +106,8 @@ src/
   config.js     TEST_BUILD switch and which countries are active
   style.css     All styling
   data/
-    countries.js   The 195 countries: code, name, real continent, lat/lon (not used for placing), how to say it
-    continents.js  The six real continents (for My Flags and celebrations)
+    countries.js   The 195 countries: code, name, real continent, lat/lon, how to say it
+    continents.js  The six real continents: map area, world size, colour, map label spot
     facts.js       Two fun facts per country
 docs/
   ARCHITECTURE.md  How the game works inside, and the tricky parts
@@ -130,9 +139,10 @@ Progress is stored only in the browser (`localStorage`, key `flag-explorer-save-
 
 ## License
 
-The game's code is under the [MIT License](LICENSE): anyone may use, copy, change and share it, as long as they keep the license notice. The flag images keep their own license, listed below.
+The game's code is under the [MIT License](LICENSE): anyone may use, copy, change and share it, as long as they keep the license notice. The flag images and map data keep their own licenses, listed below.
 
 ## Credits
 
 - Flag images: [flag-icons](https://github.com/lipis/flag-icons) (MIT license), bundled locally.
+- Map shapes (Real world map): [world-atlas](https://github.com/topojson/world-atlas), from [Natural Earth](https://www.naturalearthdata.com/) (public domain).
 - 3D: [three.js](https://threejs.org/) (MIT). Build tool: [Vite](https://vite.dev/) (MIT).

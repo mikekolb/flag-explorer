@@ -1,6 +1,6 @@
 # How Flag Explorer works
 
-Plain HTML, CSS and JavaScript (ES modules), built with Vite. The only runtime library is `three` (3D). `flag-icons` provides the flag images. There is no backend and no framework.
+Plain HTML, CSS and JavaScript (ES modules), built with Vite. The only runtime libraries are `three` (3D) and `topojson-client` (reading map data). `flag-icons` provides the flag images and `world-atlas` the real map shapes. There is no backend and no framework.
 
 ## Big picture
 
@@ -10,20 +10,29 @@ index.html ── loads ──> src/main.js
           ┌───────────────┼────────────────────┬───────────────┐
           ▼               ▼                    ▼               ▼
      world.js         player.js           controls.js        ui.js
-   (one island in 3D) (the kid model)     (touch/keys)   (all screens/popups)
+   (one region in 3D) (the kid model)     (touch/keys)   (all screens/popups)
           │                                                    │
           ▼                                                    ▼
-     islands.js  <── save.seed                       save.js, speech.js, flags.js
-   (random shapes,
-    flag spots, island maps)
+       maps.js  (which map is on)                    save.js, speech.js, flags.js
+       ┌──┴──────────────┐
+       ▼                 ▼
+   islands.js         earth.js ──> geo.js <── world-atlas map data
+ (made-up islands)   (real continents)
 ```
 
-- **Only one island is in memory at a time.** Flying to another island throws away the old world (`world.dispose()`) and builds the new one (`buildWorld()` in `world.js`). A build takes a fraction of a second.
+- A **region** is one walkable world: an island on the islands map, or a continent on the real world map.
+- **Only one region is in memory at a time.** Flying to another one throws away the old world (`world.dispose()`) and builds the new one (`buildWorld()` in `world.js`). A build takes a fraction of a second.
 - **`main.js` owns the game loop** (`frame()`): read input → move the player → resolve collisions → stick to the ground → check for flags → update the camera → render → update the hint arrow and minimap → save the position every 3 seconds.
 - **`ui.js` never touches 3D objects.** It talks to the game through the small `game` object that `main.js` passes to `initUI()` (`save`, `player`, `world`, `travel()`, `setHint()`, `setSetting()`, `newWorld()`, `resetAll()`, `onModalChange()`).
 - While any popup is open, the game is paused and controls are turned off (`onModalChange`).
 
-## The random world (`islands.js`)
+## Two maps (`maps.js`)
+
+Settings → "Which map?" sets `save.settings.map`: `'islands'` (default) or `'earth'`. Changing it reloads the page. `initMap()` runs once at start, and the rest of the game only asks `maps.js`: `regions()`, `regionById(id)`, `regionOf(code)`, `codesIn(id)`, `planRegion(id)`, and `inOn()` ("is **on** Sunny Island" but "is **in** Europe").
+
+Both maps make the same kind of **plan** for a region: `{ region, W, H, land, soft, flags: [{code, x, z}], center, paint(px) }`. `world.js` builds the 3D world from any plan. Found flags are keyed by country code, so they count on both maps.
+
+## The made-up islands (`islands.js`)
 
 - World units are called **steps**. 1 step ≈ 1 metre for the character (the kid is about 2.5 steps tall).
 - There are six islands (`ISLANDS`: Sunny, Berry, Leafy, Rocky, Candy, Snowy), each with a name, a label colour and a set of pastel meadow colours. Each island is a square world of `SIZE` (560) steps with the middle at `(0, 0)`. `x` is east and `z` is south.
@@ -37,24 +46,32 @@ index.html ── loads ──> src/main.js
 - `paintIsland(plan, px)` paints the island map at `px` pixels per step: deep and shallow water, sand, and meadows in pastel patches (a jittered-grid Voronoi with wiggly white lines between patches, so it looks like a colourful map). It's the **texture on the terrain**, and is also reused for the minimap, the big map, and (at small size) the All islands map.
 - `baseHeight(soft, x, z)`: ground height before hills, used by both the terrain and the painting so the beaches line up.
 
-The real continents (`src/data/continents.js`) are only used for learning: the flag popup says "A country in Africa", My Flags groups flags by continent, and finding every country from a continent celebrates.
+## The real world (`earth.js` and `geo.js`)
 
-## Building an island (`world.js` → `buildWorld(plan, found)`)
+- Each continent covers a lat/lon box (`src/data/continents.js`). `makeProjection()` in `geo.js` turns lat/lon into world `x`/`z` with a simple equirectangular projection, scaled so the longest side is `size` steps.
+- Oceania crosses the date line (lon 110 → 192). Negative longitudes are shifted by +360 there (`proj.norm`), and map rings that cross the date line are "unwrapped" while drawing.
+- `world-atlas/countries-50m.json` (Natural Earth) is loaded once with a dynamic import. `drawMask()` draws the land mask, `drawGround()` the colourful political map (the terrain texture), and `drawWorld()` the world map for fast travel.
+- `planContinent(id)` starts each flag at its country's real lat/lon, then pushes flags apart until every pair is at least 15 steps apart, so tiny countries (Vatican City, Monaco…) each get room. A flag that ends up in the sea moves to nearby land, or gets a small round island.
+
+On both maps the real continents are also used for learning: the flag popup says "A country in Africa", My Flags groups flags by continent, and finding every country from a continent celebrates.
+
+## Building a region (`world.js` → `buildWorld(plan, found)`)
 
 1. **Choose a hiding spot** per flag, from a random number seeded by the country code: about 34% open ground, 26% behind a house, 20% on a hill, 20% in a cave.
 2. **Ground height** (`heightAt(x, z)`): `baseHeight` (sea floor ≈ −0.8, under a see-through water plane at 0; gentle noise makes rolling hills) plus Gaussian "bumps" for the flag hills and some extra hills. Low flags get a small mound so they're never under water. **The character and the terrain mesh both use `heightAt`**, so walking matches what you see.
 3. **Meshes:** one terrain plane (about 3 steps per square, flat-shaded, map texture), sea plane and sea floor, then instanced meshes for houses, roofs, trees and cave rocks. These are few draw calls, which matters on iPad. Each cave has its own dome mesh, which fades out when the player is inside so the camera can see in.
 4. **Collisions:** circles (trees, rocks, flag poles) and boxes (houses) stored in a grid of 8-step cells. `resolve(x, z, radius)` pushes the player out of them. There's no collision with the dome itself; the ring of rocks forms the cave wall, with a gap for the mouth.
 5. **Flags:** pole (instanced, turns gold when found), a cloth plane with the flag texture (waves when near the player), and a spinning gold star once found. A hint "beacon" (a tall glowing cylinder) is placed on the hinted flag.
-6. **Spawn point:** land near the middle of the island, not on top of a flag. The game also remembers the last position on each island.
+6. **Spawn point:** land near the middle of the region, not on top of a flag. The game also remembers the last position on each island and continent.
 
-Everything uses seeded randomness (`noise.js` → `rng(seed)`), so each island looks the same every visit, as long as the seed and the code don't change.
+Everything uses seeded randomness (`noise.js` → `rng(seed)`), so each region looks the same every visit, as long as the seed and the code don't change.
 
 ## Fast travel and the maps
 
-- **Map → This island:** the painted island, found flags, the hint star and the player arrow.
-- **Map → All islands:** the six islands in a grid (3 × 2), each with its found flags and a label ("12 of 33 found"). Tap an island or its label to fly there (`travel(id)` in `main.js`).
-- **New random world** (Settings): `newWorld()` in `main.js` picks a new seed, clears the saved positions and reloads. Found flags stay found; the flags not found yet get new spots.
+- **Map → This island / This continent:** the painted map, found flags, the hint star and the player arrow.
+- **Map → World (real world map):** the world map coloured by continent, with found flags at their real spots. Tap a continent to fly there.
+- **Map → All islands (islands map):** the six islands in a grid (3 × 2), each with its found flags and a label ("12 of 33 found"). Tap an island or its label to fly there (`travel(id)` in `main.js`).
+- **New random world** (Settings, islands map only): `newWorld()` in `main.js` picks a new seed, clears the saved positions and reloads. Found flags stay found; the flags not found yet get new spots.
 
 ## Flags (images)
 
@@ -69,7 +86,7 @@ Everything uses seeded randomness (`noise.js` → `rng(seed)`), so each island l
 
 ## Saving (`save.js`)
 
-- One JSON object in `localStorage['flag-explorer-save-v1']`: `found` (code → time found), `seed` (which random world), `last` (last island), `pos` (last position per island), `celebrated` (which celebrations were shown: continents and `all` store the flag count at the time so a bigger total celebrates again; islands are stored as `island-<seed>-<id>` so a new world can celebrate again), `settings` (`voice`, `fast`).
+- One JSON object in `localStorage['flag-explorer-save-v1']`: `found` (code → time found), `seed` (which random world), `last` (last region), `pos` (last position per island and per continent), `celebrated` (which celebrations were shown: continents and `all` store the flag count at the time so a bigger total celebrates again; islands are stored as `island-<seed>-<id>` so a new world can celebrate again), `settings` (`voice`, `fast`, `map`).
 - `loadSave()` fills in missing fields, so older saves keep working. Saves from the old real-map version have no seed: they get one, and their old continent positions are dropped (`main.js`). Found flags are kept.
 - **Reset gotcha:** reset reloads the page, and the page saves while it closes (`visibilitychange`). To stop that from writing the old flags back, `resetAll()` first empties the save object in memory, then `resetSave()` sets a lock that blocks any more writes until the reload. `newWorld()` uses the same lock (`lockSave()`) so the old position is not saved onto the new world.
 
@@ -81,7 +98,7 @@ Everything uses seeded randomness (`noise.js` → `rng(seed)`), so each island l
 ## Performance choices (for iPad)
 
 - Pixel ratio capped at 1.5 (1 in Fast mode). Antialiasing is off in Fast mode. There are no real-time shadows (just a round blob under the kid), plus fog and a short camera range.
-- Lambert materials, flat shading, instancing. Only the current island is loaded.
+- Lambert materials, flat shading, instancing. Only the current region is loaded.
 - Changing Fast mode reloads the page, because antialiasing can only be set when the renderer is created.
 
 ## Version stamp
